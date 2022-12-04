@@ -1,0 +1,114 @@
+# Day 4: Camp Cleanup
+
+```elixir
+Mix.install(
+  [
+    {:kino_aoc, git: "https://github.com/ljgago/kino_aoc"}
+  ],
+  force: true
+)
+```
+
+## Part 1
+
+<!-- livebook:{"attrs":{"day":"4","session_secret":"WEIZHLIU","variable":"input","year":"2022"},"kind":"Elixir.KinoAOC.HelperCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, input} = KinoAOC.download_puzzle("2022", "4", System.fetch_env!("LB_WEIZHLIU"))
+```
+
+```elixir
+input_sample = """
+2-4,6-8
+2-3,4-5
+5-7,7-9
+2-8,3-7
+6-6,4-6
+2-6,4-8
+"""
+```
+
+```elixir
+defmodule PartOne do
+  def has_overlap(pair) do
+    pair
+    |> String.split(",")
+    |> Enum.map(fn pair ->
+      pair
+      |> String.split("-")
+      |> Enum.map(&String.to_integer/1)
+    end)
+    |> check_overlap?()
+  end
+
+  def check_overlap?([[x1, x2], [y1, y2]]) do
+    (x1 <= y1 and x2 >= y2) or (x1 >= y1 and x2 <= y2)
+  end
+end
+```
+
+```elixir
+input
+|> String.split("\n", trim: true)
+|> Enum.map(&PartOne.has_overlap/1)
+|> Enum.count(& &1)
+```
+
+## Part 2
+
+```elixir
+input
+|> String.split("\n", trim: true)
+|> Enum.map(&String.split(&1, ","))
+|> Enum.map(
+  &(Enum.map(&1, fn p ->
+      p
+      |> String.split("-")
+      |> Enum.map(fn e -> String.to_integer(e) end)
+      |> then(fn p -> apply(Range, :new, p) end)
+    end)
+    |> then(fn [p1, p2] -> Range.disjoint?(p1, p2) end))
+)
+|> Enum.count(&not/1)
+```
+
+```elixir
+defmodule DayFour do
+  def run(input, f) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(&convert_pair(&1, f))
+  end
+
+  def convert_pair(pair, f) do
+    pair
+    |> String.split(",")
+    |> Enum.map(&to_integer_pair(&1, f))
+  end
+
+  def to_integer_pair(elf, f) do
+    elf
+    |> String.split("-")
+    |> Enum.map(&String.to_integer/1)
+    |> then(f)
+  end
+
+  def pair_to_range(pair) do
+    apply(Range, :new, pair)
+  end
+
+  def check_overlap?([[x1, x2], [y1, y2]]) do
+    (x1 <= y1 and x2 >= y2) or (x1 >= y1 and x2 <= y2)
+  end
+end
+
+part1 =
+  DayFour.run(input, & &1)
+  |> Enum.map(&DayFour.check_overlap?/1)
+  |> Enum.count(& &1)
+
+part2 =
+  DayFour.run(input, &DayFour.pair_to_range/1)
+  |> Enum.map(&apply(Range, :disjoint?, &1))
+  |> Enum.count(&not/1)
+```
