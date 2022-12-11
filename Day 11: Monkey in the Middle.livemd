@@ -1,0 +1,88 @@
+# Day 11: Monkey in the Middle
+
+## Section
+
+```elixir
+input =
+  "Monkey 0:\n  Starting items: 79, 98\n  Operation: new = old * 19\n  Test: divisible by 23\n    If true: throw to monkey 2\n    If false: throw to monkey 3\n\nMonkey 1:\n  Starting items: 54, 65, 75, 74\n  Operation: new = old + 6\n  Test: divisible by 19\n    If true: throw to monkey 2\n    If false: throw to monkey 0\n\nMonkey 2:\n  Starting items: 79, 60, 97\n  Operation: new = old * old\n  Test: divisible by 13\n    If true: throw to monkey 1\n    If false: throw to monkey 3\n\nMonkey 3:\n  Starting items: 74\n  Operation: new = old + 3\n  Test: divisible by 17\n    If true: throw to monkey 0\n    If false: throw to monkey 1\n"
+
+input =
+  "Monkey 0:\n  Starting items: 74, 64, 74, 63, 53\n  Operation: new = old * 7\n  Test: divisible by 5\n    If true: throw to monkey 1\n    If false: throw to monkey 6\n\nMonkey 1:\n  Starting items: 69, 99, 95, 62\n  Operation: new = old * old\n  Test: divisible by 17\n    If true: throw to monkey 2\n    If false: throw to monkey 5\n\nMonkey 2:\n  Starting items: 59, 81\n  Operation: new = old + 8\n  Test: divisible by 7\n    If true: throw to monkey 4\n    If false: throw to monkey 3\n\nMonkey 3:\n  Starting items: 50, 67, 63, 57, 63, 83, 97\n  Operation: new = old + 4\n  Test: divisible by 13\n    If true: throw to monkey 0\n    If false: throw to monkey 7\n\nMonkey 4:\n  Starting items: 61, 94, 85, 52, 81, 90, 94, 70\n  Operation: new = old + 3\n  Test: divisible by 19\n    If true: throw to monkey 7\n    If false: throw to monkey 3\n\nMonkey 5:\n  Starting items: 69\n  Operation: new = old + 5\n  Test: divisible by 3\n    If true: throw to monkey 4\n    If false: throw to monkey 2\n\nMonkey 6:\n  Starting items: 54, 55, 58\n  Operation: new = old + 7\n  Test: divisible by 11\n    If true: throw to monkey 1\n    If false: throw to monkey 5\n\nMonkey 7:\n  Starting items: 79, 51, 83, 88, 93, 76\n  Operation: new = old * 3\n  Test: divisible by 2\n    If true: throw to monkey 0\n    If false: throw to monkey 6\n"
+```
+
+```elixir
+defmodule D11 do
+  def round(monkeys, 0), do: monkeys
+
+  def round(monkeys, times) do
+    round(Enum.reduce(monkeys, monkeys, &turn/2), times - 1)
+  end
+
+  def turn(monkey, all) do
+    get_in(all, [Access.filter(&(&1.id == monkey.id)), :items])
+    |> hd()
+    |> Enum.reduce(all, fn item, accu ->
+      new_level =
+        monkey.op.(item)
+        |> rem(9_699_690)
+
+      accu =
+        accu
+        |> update_in([Access.filter(&(&1.id == monkey.id)), :items], &tl/1)
+        |> update_in([Access.filter(&(&1.id == monkey.id)), :kpi], &(&1 + 1))
+
+      case new_level |> rem(monkey.div_by) do
+        0 -> pass(new_level, monkey.true_target, accu)
+        _ -> pass(new_level, monkey.false_target, accu)
+      end
+    end)
+  end
+
+  def pass(item, target, all) do
+    update_in(all, [Access.filter(&(&1.id == target)), :items], &(&1 ++ [item]))
+  end
+
+  def monkey_parser(raw_monkey) do
+    raw_monkey
+    |> String.split("\n", trim: true)
+    |> Enum.reduce(%{}, &line/2)
+    |> Map.put(:kpi, 0)
+  end
+
+  def line("Monkey " <> id, map) do
+    Map.put(map, :id, String.at(id, 0) |> String.to_integer())
+  end
+
+  def line("  Starting items: " <> items, map) do
+    Map.put(map, :items, String.split(items, ", ") |> Enum.map(&String.to_integer/1))
+  end
+
+  def line("  Operation: new = " <> op, map) do
+    Map.put(map, :op, fn old -> Code.eval_string(op, old: old) |> elem(0) end)
+  end
+
+  def line("  Test: divisible by " <> div_by, map) do
+    Map.put(map, :div_by, String.to_integer(div_by))
+  end
+
+  def line("    If true: throw to monkey " <> true_target, map),
+    do: Map.put(map, :true_target, String.to_integer(true_target))
+
+  def line("    If false: throw to monkey " <> false_target, map),
+    do: Map.put(map, :false_target, String.to_integer(false_target))
+end
+```
+
+```elixir
+import D11
+
+monkeys =
+  input
+  |> String.split("\n\n", trim: true)
+  |> Enum.map(&monkey_parser/1)
+  |> round(10_000)
+  |> Enum.map(& &1.kpi)
+  |> Enum.sort(:desc)
+  |> Enum.take(2)
+  |> then(&apply(Kernel, :*, &1))
+```

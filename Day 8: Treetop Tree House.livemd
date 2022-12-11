@@ -1,0 +1,96 @@
+# Day 8: Treetop Tree House
+
+## Section
+
+```elixir
+defmodule D8attempt1 do
+  def h(input), do: input |> String.split("\n") |> length()
+  def w(input), do: input |> String.split("\n") |> hd() |> String.length()
+
+  def visiable?(tree, grid, input) do
+    fh = h(input) - 1
+    fw = w(input) - 1
+
+    check_right(tree, grid, {fh, fw}) ||
+      check_left(tree, grid, {fh, fw}) ||
+      check_top(tree, grid, {fh, fw}) ||
+      check_down(tree, grid, {fh, fw})
+  end
+
+  def check_right({{fw, _y}, _h}, _grid, {fw, _fh}), do: true
+
+  def check_right({{x, y}, h}, grid, {fw, _h}) do
+    for(i <- (x + 1)..fw, do: {i, y})
+    |> Enum.map(&Map.get(grid, &1))
+    |> Enum.max()
+    |> Kernel.<(h)
+    |> IO.inspect(label: "r")
+  end
+
+  def check_left({{0, _y}, _h}, _grid, _), do: true
+
+  def check_left({{x, y}, h}, grid, _) do
+    for(i <- 0..(x - 1), do: {i, y})
+    |> Enum.map(&Map.get(grid, &1))
+    |> Enum.max()
+    |> Kernel.<(h)
+    |> IO.inspect(label: "l")
+  end
+
+  def check_down({{_x, fh}, _h}, _grid, {_w, fh}), do: true
+
+  def check_down({{x, y}, h}, grid, {_w, fh}) do
+    for(i <- (y + 1)..fh, do: {x, i})
+    |> Enum.map(&Map.get(grid, &1))
+    |> Enum.max()
+    |> Kernel.<(h)
+    |> IO.inspect(label: "down")
+  end
+
+  def check_top({{_x, 0}, _h}, _grid, _), do: true
+
+  def check_top({{x, y}, h}, grid, _) do
+    for(i <- 0..(y - 1), do: {x, i})
+    |> Enum.map(&Map.get(grid, &1))
+    |> Enum.max()
+    |> Kernel.<(h)
+    |> IO.inspect(label: "up")
+  end
+
+  def parse_row(row, y_index) do
+    row
+    |> Enum.with_index(&{{&2, y_index}, String.to_integer(&1)})
+  end
+end
+```
+
+```elixir
+input = """
+30373
+25512
+65332
+33549
+35390
+"""
+
+# grid =
+#   input
+#   |> String.split("\n", trim: true)
+#   |> Enum.map(&String.codepoints/1)
+#   |> Enum.with_index(&D8.parse_row/2)
+#   |> List.flatten()
+#   |> Enum.into(%{})
+
+# grid
+# |> Enum.map(&{&1, D8.visiable?(&1, grid, input)})
+# |> Enum.count(&elem(&1, 1))
+
+# D8.visiable?({{1, 2}, 5}, grid, input)
+# D8.check_right({{1, 2}, 5}, grid, {4, 4})
+```
+
+```elixir
+input
+|> String.split("\n", trim: true)
+|> Enum.map()
+```

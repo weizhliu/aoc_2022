@@ -1,0 +1,132 @@
+# Aoc 2022 day7
+
+```elixir
+Mix.install(
+  [
+    {:kino_aoc, git: "https://github.com/ljgago/kino_aoc"}
+  ],
+  force: true
+)
+```
+
+## inputs
+
+```elixir
+sample_input = """
+$ cd /
+$ ls
+dir a
+14848514 b.txt
+8504156 c.dat
+dir d
+$ cd a
+$ ls
+dir e
+29116 f
+2557 g
+62596 h.lst
+$ cd e
+$ ls
+584 i
+$ cd ..
+$ cd ..
+$ cd d
+$ ls
+4060174 j
+8033020 d.log
+5626152 d.ext
+7214296 k
+"""
+```
+
+<!-- livebook:{"attrs":{"day":"7","session_secret":"TAIANSU","variable":"input","year":"2022"},"chunks":null,"kind":"Elixir.KinoAOC.HelperCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, input} = KinoAOC.download_puzzle("2022", "7", System.fetch_env!("LB_TAIANSU"))
+```
+
+```elixir
+defmodule Day7 do
+  def run("$ cd /", {_routes, sizes}) do
+    {["/"], sizes}
+  end
+
+  def run("$ cd ..", {[_hd | tail], sizes}) do
+    {tail, sizes}
+  end
+
+  def run("$ cd " <> dir, {routes, sizes}) do
+    {[dir | routes], sizes}
+  end
+
+  def run("dir " <> name, {routes, sizes}) do
+    {
+      routes,
+      name
+      |> sub_dir(routes)
+      |> then(&Map.put_new(sizes, &1, 0))
+    }
+  end
+
+  def run("$ ls", rs) do
+    rs
+  end
+
+  def run(file, {routes, sizes}) do
+    file_size = file |> String.split(" ") |> List.first() |> String.to_integer()
+
+    {
+      routes,
+      routes
+      |> Day7.scan_routes()
+      |> Enum.reduce(sizes, fn dir, acc ->
+        Map.update!(acc, dir, &(&1 + file_size))
+      end)
+    }
+  end
+
+  def scan_routes(routes) do
+    routes
+    |> Enum.reverse()
+    |> Enum.scan(&Path.join(&2, &1))
+  end
+
+  def sub_dir(dir, routes) do
+    [dir | routes]
+    |> Enum.reverse()
+    |> Path.join()
+  end
+end
+```
+
+## du
+
+```elixir
+du =
+  input
+  |> String.split("\n", trim: true)
+  |> Enum.reduce({[], %{"/" => 0}}, &Day7.run/2)
+  |> elem(1)
+  |> IO.inspect(limit: :infinity)
+```
+
+## part 1
+
+```elixir
+du
+|> Enum.map(&elem(&1, 1))
+|> Enum.filter(&(&1 <= 100_000))
+|> Enum.sum()
+```
+
+## part2
+
+```elixir
+unused_space = 70_000_000 - Map.get(du, "/")
+required_space = 30_000_000 - unused_space
+
+du
+|> Enum.map(&elem(&1, 1))
+|> Enum.filter(&(&1 >= required_space))
+|> Enum.min()
+```
