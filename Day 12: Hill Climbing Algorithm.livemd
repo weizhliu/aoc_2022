@@ -1,0 +1,297 @@
+# Day 12: Hill Climbing Algorithm
+
+```elixir
+Mix.install([
+  {:vega_lite, "~> 0.1.6"},
+  {:kino_vega_lite, "~> 0.1.7"}
+])
+
+alias VegaLite, as: Vl
+```
+
+## Section
+
+<!-- livebook:{"attrs":{"day":"12","session_secret":"WEIZHLIU","variable":"puzzle_input","year":"2022"},"chunks":null,"kind":"Elixir.KinoAOC.HelperCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, puzzle_input} = KinoAOC.download_puzzle("2022", "12", System.fetch_env!("LB_WEIZHLIU"))
+```
+
+```elixir
+input = "Sabqponm\nabcryxxl\naccszExk\nacctuvwj\nabdefghi\n"
+```
+
+```elixir
+defmodule D12 do
+  def possible?(%{h: fh}, %{h: ?S}), do: fh in [97, 98]
+  def possible?(%{h: ?E}, %{h: th}), do: th in [25 + 97, 26 + 97]
+  def possible?(%{h: fh}, %{h: th}), do: fh - th == 1 or th == fh
+  def possible?(_, _), do: false
+
+  def run(grid) do
+    node = closest_uncheck_node(grid)
+    grid = make_node_checked(grid, node)
+    target_nodes = possible_target_nodes(node, grid)
+  end
+
+  def closest_uncheck_node(grid) do
+    grid
+    |> Enum.reject(& &1.checked)
+    |> Enum.sort(&(&1.distance < &2.distance))
+    |> hd()
+  end
+
+  def possible_target_nodes(%{c: {x, y}}, grid) do
+    [{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}]
+    |> Enum.map(&find(grid, &1))
+    |> Enum.reject(& &1.checked)
+    |> Enum.filter(&possible?(current, &1))
+  end
+
+  def make_node_checked(grid, node) do
+    update_in([Access.filter(&(&1.c == node.c))], fn n -> Map.put(n, :checked, true) end)
+  end
+
+  def add_node_distance(grid, node) do
+    update_in([Access.filter(&(&1.c == node.c))], fn n -> Map.update(n, :distance, &(&1 + 1)) end)
+  end
+
+  def next(paths, grid) when is_list(paths) do
+    Enum.flat_map(paths, fn path -> next(path, grid) end)
+    |> next(grid)
+  end
+
+  def next({:run, [%{h: ?S} | _] = path}, _), do: {:finish, path}
+  def next({:noop, path}, _), do: {:noop, path}
+  def next({:finish, path}, _), do: {:finish, path}
+
+  def next({:run, [%{c: {x, y}} = current | t] = path}, grid) do
+    [{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}]
+    |> Enum.map(&find(grid, &1))
+    |> Enum.reject(&(&1 in t))
+    |> Enum.filter(&possible?(current, &1))
+    |> Enum.map(&put_step(&1, path))
+  end
+
+  def put_step([], path), do: {:noop, path}
+  def put_step(n, path), do: {:run, [n | path]}
+
+  def find(grid, {_, _} = c), do: Enum.find(grid, &(&1.c == c))
+  def find(grid, [h]), do: Enum.find(grid, &(&1.h == h))
+end
+```
+
+```elixir
+import D12
+
+grid =
+  input
+  |> String.split("\n", trim: true)
+  |> Enum.map(&(String.to_charlist(&1) |> Enum.with_index()))
+  |> Enum.with_index(fn row, y ->
+    Enum.map(row, fn {height, x} ->
+      %{h: height, c: {x, y}, checked: false, distance: :infi, last: nil}
+    end)
+  end)
+  |> List.flatten()
+  |> update_in([Access.filter(&(&1.h == ?E))], fn n -> Map.put(n, :distance, 0) end)
+
+# run(grid)
+
+# D123.next([{:run, [goal]}], grid)
+
+# |> Enum.chunk_by(&(&1 == :stop))
+# |> Enum.reject(&(&1 == [:stop]))
+# |> Enum.map(&length/1)
+# |> Enum.min()
+# |> Kernel.-(1)
+```
+
+## Part 1 by https://github.com/code-shoily/advent_of_code
+
+```elixir
+raw_input = """
+abaaaaacccccccccccccccccccccccccccccccccccccccaaaaaaaccccaaaaaaaaaaaaaaaaacccccaaaaaacccccccccccccccccccccccaaaaaaaaccccccccccccccccccccccccccccccccaaaaaa
+abaaaaaacccaaaacccccccccccccccccccccccaccccccccaaaaaaaaccaaaaaaaaaaaaaaaaccccccaaaaaacccccccccccccccccccccccccaaaaccccccccccccccccccccccccccccccccccaaaaaa
+abaaaaaacccaaaacccccccccccccccccaaaaaaaacccccccaaaaaaaaacaaaaaaaaaaaaacccccccccaaaaacccccccccccccccccccccccccaaaaacccccccccccccccccccaaaccccccccccccaaaaaa
+abaaacaccccaaaaccccccccccccccccccaaaaaacccccccccaaaaaaaccccaaaaaaaaaaacccccccccaaaaacccccccccccccccccccccccccaacaaaccccccccccccccccccaaacccccccccccccccaaa
+abaaacccccccaaacccccccccccaacccccaaaaaaccccccccaaaaaaccccccaacaaaaaaaacccccccccccccccccccccccaaccccccccccccccacccaaaaacccccccccaaccccaaacccccccccccccccaaa
+abccccccccccccccccccccccccaaaaccaaaaaaaacccccccaaaaaaaccccccccaaaaaaaaaccccccccccaacccccccccaaaccccccccccccccccccacaaacccccccccaaaaccaaacccccccccccccccaac
+abccccccccccccccccccccccaaaaaacaaaaaaaaaaccccccaaccaaaaacccccaaaaccaaaaccccccccccaaacaacccccaaacaaacccaaccccccccaaaaaaaacccccccaaaaakkkkkkcccccccccccccccc
+abccccccccccccccccccccccaaaaaccaaaaaaaaaacccccccccccaaaaaaccccacccaaaaaccccccccccaaaaaaccaaaaaaaaaaaaaaaccccccccaaaaaaaaccccccccaaajkkkkkkkaccccccaacccccc
+abcccccccccccccccccccccccaaaaacacacaaaccccccccccccccaaaaaaccccccccaaaacccccccccaaaaaaacccaaaaaaaaaaaaaaaaaccccccccaaaaaccccccccccjjjkkkkkkkkccaaaaaacccccc
+abcccccccccccccccccccccccaacaacccccaaacccaccccccccccaaaaaaccccccccaaaacccccccccaaaaaaacccccaaaaaacaaaaaaaacccccccaaaaacccccccjjjjjjjooopppkkkcaaaaaaaccccc
+abcccccccccccccccccaacaacccccccccccaaaaaaacccccccccccaaaaacccccccccccccccccccccccaaaaaaccccaaaaaaccaaaaaaacccccccaaaaaacciijjjjjjjjoooopppkkkcaaaaaaaacccc
+abccccccccccaaaccccaaaaacccccccccccccaaaaacccccccccccaaaaccccccccccccccccccccccccaacaaaccccaaaaaaacaaaaacccccccccaccaaaciiiijjjjjjoooopppppkllcaaaaaaacccc
+abccaaccccccaaaaacaaaaacccccccccccccaaaaaacccccccccccccccccccccccccccccccccccccccaacccccccaaaacaaaaaaaaacccaaccccaaaaaciiiiinoooooooouuuupplllaaaaaacccccc
+abcaaacccccaaaaaacaaaaaacccccccccccaaaaaaaaccccccccaacaccccccccccccccccccccccccccccccccccccaccccccccccaaccaaaccccaaaaaciiinnnooooooouuuuuppplllaaacacccccc
+abaaaaaacccaaaaaacccaaaacccccccccccaaaaaaaaccccccccaaaaccccccccccccccccccccccccccccccccccccccccccccccccaaaaacaacaaaaaaiiinnnnntttoouuuuuupppllllcccccccccc
+abaaaaaaccccaaaaacccaaccccccccccacccccaaccccccccccaaaaaccccccccccccccccccccccccccccccccccccccccccccccccaaaaaaaacaaaaaaiiinnnnttttuuuuxxuuupppllllccccccccc
+abaaaaacccccaacaaccccccccccccccaaaccccaacccccaacccaaaaaacccccccccccccccccccccccccccccccccccccccccccccccccaaaaaccaaaaaaiiinnnttttxxuuxxyyuuppppllllcccccccc
+abaaaacccccccccccccccccccccaaacaaaccccccaaacaaaaccacaaaacccccccccccccccccccccccccccccccccccaacccccccccccaaaaaccccaaaccciinnntttxxxxxxxyyvvvqqqqqlllccccccc
+abaaaaaccccccccccccccccccccaaaaaaaaaacccaaaaaaacccccaaccccccccccccccccccccccccccccccccccccaaacccccccccccaacaaaccccccccciiinntttxxxxxxxyyvvvvvqqqqljjcccccc
+abccaaaccaccccccccaaacccccccaaaaaaaaaccccaaaaaacccccccccccccccccccccccccccccccaacccccccaaaaacaaccccccccccccaacccccccccchhinnnttxxxxxxyyyyyvvvvqqqjjjcccccc
+SbccccaaaacccccccaaaaaacccccccaaaaaccccccaaaaaaaaccccccccccccccccccccaaccccccaaaaccccccaaaaaaaacccccccccccccccccccccccchhhnnntttxxxxEzyyyyyvvvqqqjjjcccccc
+abccccaaaacccccccaaaaaaccccccaaaaaacccccaaaaaaaaaacccccccccccccccccccaaccccccaaaaccccccccaaaaacccccccccccccccccccccccccchhhnntttxxxyyyyyyyvvvvqqqjjjcccccc
+abcccaaaaaaccccccaaaaaacccccaaaaaaaccccaaaaaaaaaacccccccccccccccccaaaaaaaacccaaaacccccccaaaaaccccccccccccccccccccccccccchhmmmttxxxyyyyyyvvvvvqqqjjjdcccccc
+abcccaaaaaacccccccaaaaacccccaaacaaacaaaaaaaaaaccccccccccccaaacccccaaaaaaaaccccccccccccccaacaaacccccccaacaaacccccccccccchhhmmmtswwwyyyyyyvvvqqqqjjjjdddcccc
+abcccccaacccccccccaacaacccccccccccacaaaaaccaaaccccccccccaaaaacccccccaaaacccccccccccccccccccaaccccccccaaaaaacccccccccccchhhmmssswwwwwwyyywvrqqqjjjjdddccccc
+abcccccccccccccccccccccccccccccccccaaaaaccccaaccccccccacaaaaaacccccaaaaacccccccccccccccccccccccccccccaaaaaacccccccccccchhhmmssswwwwwwywywwrrqjjjjddddccccc
+abcccccccccccccccccccccccccccccccccaaaaaccccccccaaacaaacaaaaaacccccaaaaaaccccccccccccccccccccccccccccaaaaaaaccccccccccchhmmmsssswwsswwwwwwrrkkjjddddcccccc
+abccccccccccccccccccccccccccccccccccaaaaacccccccaaaaaaacaaaaaccccccaaccaacccccccccccaaccccccccccccccaaaaaaaacaacaaccccchhhmmmsssssssswwwwrrrkkjddddaaccccc
+abcccccccccccccccccccccccccaaaaaccccaacccccccccccaaaaaacaaaaacccccccccccccaacccccccaaaaaacccccccccccaaaaaaaacaaaaaccccchhgmmmmssssssrrwwwrrrkkddddaaaccccc
+abcccccccccccccccccccccccccaaaaacccccccccccccccccaaaaaaaacccccccccccccccaaaaaaccccccaaaaaccccaaccccccccaaacccaaaaaaccccgggmmmmmmllllrrrrrrrkkkeedaaaaccccc
+abcccccccccccaaccccccccccccaaaaaacccccccccccccccaaaaaaaaacccccccccccccccaaaaaaccccaaaaaaacccaaaacccccccaaccccaaaaaaccccggggmmmmllllllrrrrrkkkkeedaaaaacccc
+abcccccccccccaaacaacaaaccccaaaaaaccccccccccccccaaaaaaaaaacccccccccccccccaaaaaaccccaaaaaaaaccaaaacccccccccccccaaaaaccccccgggggglllllllllrrkkkkeeeaaaaaacccc
+abcccccccccccaaaaaacaaaacccaaaaaaccccccccccccccaaacaaaaaaccccccccccccccccaaaaaccccaaaaaaaaccaaaacccccccccccaaccaaaccccccgggggggggffflllkkkkkkeeeaaaaaacccc
+abaccccccccaaaaaaaccaaaacccccaaacccccccccccccccccccaaaaaacaccccccccaaccccaaaacccccccaaacacccccccccccccccaaaaaccccccccccccccgggggffffflllkkkkeeeccaaacccccc
+abaccccccccaaaaaaaccaaacccccccccccccccccaaaccccccccaaacaaaaaccccccaaacccccccccccccaaaacccccccccccccccccccaaaaaccccccccccccccccccaffffffkkkeeeeeccaaccccccc
+abaaaccccccccaaaaaaccccccccccccccccccccaaaaaacccccccaaaaaaaacaaaacaaacccccccccaaaaaacccccccccccccccccccccaaaaaccccccccccccccccccccaffffffeeeeecccccccccccc
+abaacccccccccaacaaaccccccccccccccccccccaaaaaaccccccccaaaaaccaaaaaaaaacccccccccaaaaaaaaccccccccccaaccccccaaaaacccccccccccccccccccccaaaffffeeeecccccccccccaa
+abaacccccccccaaccccccccccccccccaaccccccaaaaacaaccaacccaaaaacaaaaaaaaacccccccccaaaaaaaaccccccaaacaacccccccccaacccccccccccccccccccccaaaccceaecccccccccccccaa
+abaacccccccccccccccccccccccccccaaaaaacccaaaaaaaaaaaccaaacaaccaaaaaaaaaaaaacccccaaaaaaacccccccaaaaaccccccccccccccccccccccccccccccccaaacccccccccccccccaaacaa
+abcccccccccccccccccccccccccccccaaaaaccccaacaacaaaaacccaaccccccaaaaaaaaaaaacccccaaaaacccccccccaaaaaaaccccccccccccccccccccccccccccccaaacccccccccccccccaaaaaa
+abcccccccccccccccccccccccccccaaaaaaaccccccccaaaaaaaaccccccccccaaaaaaaaaaccccccaaaaaaccccccccaaaaaaaaccccccccccccccccccccccccccccccccccccccccccccccccaaaaaa
+"""
+```
+
+```elixir
+# from https://github.com/code-shoily/advent_of_code
+defmodule Solution do
+  def grid2d(data, tx \\ &Function.identity/1) do
+    for {row, row_idx} <- Enum.with_index(data),
+        {cell, col_idx} <- Enum.with_index(row),
+        into: %{} do
+      {{row_idx, col_idx}, tx.(cell)}
+    end
+  end
+
+  def parse(data) do
+    map =
+      data
+      |> String.split("\n", trim: true)
+      |> Enum.map(&String.graphemes/1)
+      |> grid2d(fn char -> :binary.first(char) end)
+
+    source = elem(Enum.find(map, fn {_, v} -> v == ?S end), 0)
+    destination = elem(Enum.find(map, fn {_, v} -> v == ?E end), 0)
+    map = %{map | source => ?a, destination => ?z}
+
+    {map, source, destination}
+  end
+
+  def to_digraph(grid) do
+    graph = :digraph.new()
+
+    Enum.reduce(grid, graph, fn {{x, y}, _}, _ ->
+      [{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}]
+      |> Enum.filter(&Map.has_key?(grid, &1))
+      |> Enum.map(fn point ->
+        unless grid[point] - grid[{x, y}] > 1 do
+          {{x, y}, point}
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.each(fn {v1, v2} ->
+        :digraph.add_vertex(graph, v1)
+        :digraph.add_vertex(graph, v2)
+        :digraph.add_edge(graph, v1, v2)
+      end)
+    end)
+
+    graph
+  end
+end
+```
+
+```elixir
+{map, source, destination} = Solution.parse(raw_input)
+graph = Solution.to_digraph(map)
+path = :digraph.get_short_path(graph, source, destination)
+
+:ok
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+path_chart =
+  Vl.new(width: 1000, height: 400)
+  |> Vl.layers([
+    Vl.new()
+    |> Vl.data_from_values(
+      Enum.map(
+        map,
+        fn {{x, y}, h} ->
+          case {x, y} do
+            ^destination -> %{"x" => y, "y" => x, "h" => 30}
+            _ -> %{"x" => y, "y" => x, "h" => ?z - h}
+          end
+        end
+      )
+    )
+    |> Vl.mark(:rect, opacity: 0.9)
+    |> Vl.encode_field(:x, "x", type: :nominal, axis: nil)
+    |> Vl.encode_field(:y, "y", type: :nominal, axis: nil)
+    |> Vl.encode(:color, field: "h", type: :quantitative),
+    Vl.new()
+    |> Vl.mark(:point, opacity: 1, size: 1, color: :red)
+    |> Vl.encode_field(:x, "x", type: :nominal, axis: nil)
+    |> Vl.encode_field(:y, "y", type: :nominal, axis: nil)
+    |> Vl.encode(:color, field: "h", type: :quantitative)
+  ])
+  |> Kino.VegaLite.new()
+  |> Kino.render()
+
+for {x, y} <- path do
+  Kino.VegaLite.push(path_chart, %{"x" => y, "y" => x, "h" => -25})
+  Process.sleep(10)
+end
+
+:ok
+```
+
+### Solution Part 1
+
+```elixir
+solution_1 = length(path) - 1
+```
+
+## Part 2 https://github.com/code-shoily/advent_of_code
+
+```elixir
+sources = Enum.map(Enum.filter(map, fn {_, v} -> v == ?a end), &elem(&1, 0))
+
+paths =
+  sources
+  |> Enum.map(fn source ->
+    :digraph.get_short_path(graph, source, destination)
+  end)
+  |> Enum.filter(& &1)
+
+:ok
+```
+
+```elixir
+Vl.new(width: 800, height: 200)
+|> Vl.layers(
+  for path <- paths do
+    Vl.new()
+    |> Vl.data_from_values(
+      path
+      |> Enum.with_index()
+      |> Enum.map(fn {{x, y}, h} -> %{"x" => y, "y" => x, "h" => h} end)
+    )
+    |> Vl.mark(:point, opacity: 1, size: 2)
+    |> Vl.encode_field(:x, "x", type: :nominal, axis: nil)
+    |> Vl.encode_field(:y, "y", type: :nominal, axis: nil)
+    |> Vl.encode(:color, field: "h", type: :quantitative)
+  end
+)
+```
+
+### Solution Part II
+
+```elixir
+solution_2 = (paths |> Enum.map(&length/1) |> Enum.min()) - 1
+```
