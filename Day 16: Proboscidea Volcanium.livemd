@@ -1,0 +1,177 @@
+# Day 16: Proboscidea Volcanium
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.8.0"},
+  {:kino_aoc, git: "https://github.com/ljgago/kino_aoc"}
+])
+```
+
+## Section
+
+<!-- livebook:{"attrs":{"day":"16","session_secret":"WEIZHLIU","variable":"puzzle_input","year":"2022"},"chunks":null,"kind":"Elixir.KinoAOC.HelperCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, puzzle_input} = KinoAOC.download_puzzle("2022", "16", System.fetch_env!("LB_WEIZHLIU"))
+```
+
+```elixir
+sample_input = """
+Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
+Valve BB has flow rate=13; tunnels lead to valves CC, AA
+Valve CC has flow rate=2; tunnels lead to valves DD, BB
+Valve DD has flow rate=20; tunnels lead to valves CC, AA, EE
+Valve EE has flow rate=3; tunnels lead to valves FF, DD
+Valve FF has flow rate=0; tunnels lead to valves EE, GG
+Valve GG has flow rate=0; tunnels lead to valves FF, HH
+Valve HH has flow rate=22; tunnel leads to valve GG
+Valve II has flow rate=0; tunnels lead to valves AA, JJ
+Valve JJ has flow rate=21; tunnel leads to valve II
+"""
+```
+
+```elixir
+defmodule D16 do
+  def parse_input_to_valves(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(&parse_line/1)
+  end
+
+  def parse_line(raw_line) do
+    [valve_head, string_tunnels] = String.split(raw_line, ~r"; tunnels? leads? to valves? ")
+    ["Valve " <> valve, string_flow_rate] = valve_head |> String.split(" has flow rate=")
+
+    %{
+      name: valve,
+      tunnels: String.split(string_tunnels, ", "),
+      flow_rate: String.to_integer(string_flow_rate)
+    }
+  end
+
+  def to_digraph(valves) do
+    graph = :digraph.new()
+
+    Enum.each(valves, fn valve ->
+      :digraph.add_vertex(graph, valve.name)
+    end)
+
+    Enum.each(valves, fn valve ->
+      Enum.each(valve.tunnels, fn lead_to ->
+        :digraph.add_edge(graph, valve.name, lead_to)
+      end)
+    end)
+
+    graph
+  end
+
+  def expected_pressure(current_valve, target_valve, graph, remain_minutes) do
+    distance = distance(graph, current_valve.name, target_valve.name)
+    (remain_minutes - distance - 1) * target_valve.flow_rate
+  end
+
+  def distance(_, from, from), do: 0
+
+  def distance(graph, from, to) do
+    graph
+    |> :digraph.get_short_path(from, to)
+    |> length()
+    |> Kernel.-(1)
+  end
+
+  def expected_valve_pressures(state, current, valves, graph) do
+    valves
+    |> Enum.map(&{&1.name, expected_pressure(current, &1, graph, state.remain)})
+  end
+
+  def next(state, from, valves, graph) do
+    expected_valve_pressures(state, from, valves, graph)
+    |> Enum.sort_by(&elem(&1, 1), :desc)
+    |> Enum.take(3)
+    |> Enum.map(fn {current, value} ->
+      elapsed = distance(graph, from.name, current) + 1
+
+      if state.remain - elapsed <= 0 do
+        state
+      else
+        next(
+          state
+          |> Map.update!(:pressure, &Kernel.+(&1, value))
+          |> Map.update!(:remain, &(&1 - elapsed)),
+          %{name: current, flow_rate: 0},
+          valves |> Enum.reject(&(&1.name == current)),
+          graph
+        )
+      end
+    end)
+  end
+
+  def next2(state, from1, from2, valves, graph) do
+    {to1, value1} =
+      to_valve1 =
+      expected_valve_pressures(state, from1, valves, graph)
+      |> Enum.sort_by(&elem(&1, 1), :desc)
+      |> hd()
+
+    elapsed = distance(graph, from1.name, to1) + 1
+
+    if state.remain - elapsed <= 0 do
+      state
+    else
+      state =
+        state
+        |> Map.update!(:pressure, &Kernel.+(&1, value1))
+        |> Map.update!(:remain, &(&1 - (elapsed - 1)))
+
+      valves = valves |> Enum.reject(&(&1.name == to1))
+
+      {to2, value2} =
+        to_valve2 =
+        expected_valve_pressures(state, from2, valves, graph)
+        |> Enum.sort_by(&elem(&1, 1), :desc)
+        |> hd()
+
+      elapsed = distance(graph, from2.name, to2) + 1
+
+      if state.remain - elapsed <= 0 do
+        state
+      else
+        state =
+          state
+          |> Map.update!(:pressure, &Kernel.+(&1, value2))
+          |> Map.update!(:remain, &(&1 - elapsed))
+
+        valves = valves |> Enum.reject(&(&1.name == to2))
+
+        next2(state, %{name: to1}, %{name: to2}, valves, graph)
+      end
+    end
+  end
+
+  def part1(valves) do
+    graph = to_digraph(valves)
+    state = %{remain: 30, opend_valves: [], pressure: 0}
+
+    next(state, %{name: "AA", flow_rate: 0}, valves, graph)
+    |> List.flatten()
+    |> Enum.sort_by(& &1.pressure, :desc)
+  end
+
+  def part2(valves) do
+    graph = to_digraph(valves)
+    state = %{remain: 26, opend_valves: [], pressure: 0}
+
+    next2(state, %{name: "AA", flow_rate: 0}, %{name: "AA", flow_rate: 0}, valves, graph)
+    # |> List.flatten()
+    # |> Enum.sort_by(& &1.pressure, :desc)
+  end
+end
+
+puzzle_input
+|> D16.parse_input_to_valves()
+|> D16.part1()
+
+# puzzle_input
+# |> D16.parse_input_to_valves()
+# |> D16.part2()
+```

@@ -1,0 +1,98 @@
+# Day 17: Pyroclastic Flow
+
+## Section
+
+```elixir
+input = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>"
+```
+
+```elixir
+defmodule D17 do
+  @zs ["-", "+", "j", "i", "o"]
+
+  def z(i), do: sigil_z(Enum.at(@zs, rem(i, 5)), [])
+
+  def sigil_z("-", []), do: [{0, 0}, {1, 0}, {2, 0}, {3, 0}]
+  def sigil_z("+", []), do: [{1, 0}, {0, 1}, {1, 1}, {1, 2}, {2, 1}]
+  def sigil_z("j", []), do: [{0, 0}, {1, 0}, {2, 0}, {2, 1}, {2, 2}]
+  def sigil_z("i", []), do: [{0, 0}, {0, 1}, {0, 2}, {0, 3}]
+  def sigil_z("o", []), do: [{0, 0}, {1, 0}, {0, 1}, {1, 1}]
+
+  def in_wall?(z), do: Enum.any?(z, fn {x, _y} -> x < 0 or x > 6 end)
+
+  def collision?(z, grid) when is_list(z), do: Enum.any?(z, &collision?(&1, grid))
+  def collision?({_, y}, _) when y < 0, do: true
+  def collision?({x, y}, [{x, y} | _t]), do: true
+  def collision?(_, []), do: false
+  def collision?({x, y}, [_h | t]), do: collision?({x, y}, t)
+
+  def move(z, {x, y}) do
+    Enum.map(z, fn {zx, zy} -> {zx + x, zy + y} end)
+  end
+
+  def move(z, "<", grid) do
+    result = move(z, {-1, 0})
+    if in_wall?(result) or collision?(result, grid), do: z, else: result
+  end
+
+  def move(z, ">", grid) do
+    result = move(z, {1, 0})
+    if in_wall?(result) or collision?(result, grid), do: z, else: result
+  end
+
+  def move(z, "down", grid) do
+    result = move(z, {0, -1})
+    if collision?(result, grid), do: {:rest, z}, else: result
+  end
+
+  def jet(jets, i), do: Enum.at(jets, rem(i, length(jets)))
+
+  def highest(grid) do
+    grid |> Enum.max_by(&elem(&1, 1)) |> elem(1)
+  end
+
+  def lowest(grid) do
+    grid |> Enum.min_by(&elem(&1, 1)) |> elem(1)
+  end
+
+  def round(jets) do
+    z = move(z(0), {2, 3})
+
+    {rest_z, tc} = tick(z, 0, [], jets)
+    round(jets, tc, rest_z ++ [], 1)
+  end
+
+  def round(_, _, grid, 2022), do: grid
+
+  def round(jets, tc, grid, rc) do
+    h = highest(grid)
+    z = move(z(rc), {2, 4 + h})
+    {rest_z, tc} = tick(z, tc, grid, jets)
+    round(jets, tc, rest_z ++ grid, rc + 1)
+  end
+
+  def tick(z, tc, grid, jets) do
+    next =
+      z
+      |> move(jet(jets, tc), grid)
+      |> move("down", grid)
+
+    case next do
+      {:rest, next_z} -> {next_z, tc + 1}
+      _ -> tick(next, tc + 1, grid, jets)
+    end
+  end
+end
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+import D17
+
+input
+|> String.codepoints()
+|> D17.round()
+|> highest()
+|> Kernel.+(1)
+```
