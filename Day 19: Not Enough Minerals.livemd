@@ -1,0 +1,83 @@
+# Day 19: Not Enough Minerals
+
+## Section
+
+```elixir
+input = """
+Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay. Each geode robot costs 2 ore and 7 obsidian.
+Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.
+"""
+```
+
+```elixir
+defmodule D19 do
+  def parse_blueprint(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      Regex.run(
+        ~r/(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)\D+(\d+)/,
+        line,
+        capture: :all_but_first
+      )
+      |> Enum.map(&String.to_integer/1)
+      |> then(fn [bp, ore_ore, clay_ore, obsi_ore, obsi_clay, geode_ore, geode_obsi] ->
+        %{
+          bp: bp,
+          ore: %{ore: ore_ore},
+          clay: %{ore: clay_ore},
+          obsi: %{ore: obsi_ore, clay: obsi_clay},
+          geo: %{ore: geode_ore, obsi: geode_obsi}
+        }
+      end)
+    end)
+  end
+
+  def build_bot(_, res, bots, :pass), do: {res, bots}
+
+  def build_bot(bp, res, bots, action) do
+    res = Map.merge(res, Map.get(bp, action), fn _k, v1, v2 -> v1 - v2 end)
+    bots = Map.update!(bots, action, &(&1 + 1))
+    {res, bots}
+  end
+
+  def find_options(bp, res) do
+    options =
+      [:ore, :clay, :obsi, :geo]
+      |> Enum.reject(fn key ->
+        cost = Map.get(bp, key)
+
+        Map.merge(res, cost, fn _k, v1, v2 -> v1 - v2 end)
+        |> Map.values()
+        |> Enum.any?(&(&1 < 0))
+      end)
+
+    [:pass | options]
+  end
+
+  def round(bp) do
+    res = %{ore: 0, clay: 0, obsi: 0, geo: 0}
+    bots = %{ore: 1, clay: 0, obsi: 0, geo: 0}
+    new_res = Map.merge(res, bots, fn _k, v1, v2 -> v1 + v2 end)
+    round(bp, new_res, bots, :pass, 1)
+  end
+
+  def round(_bp, res, _bots, _action, 24) do
+    res.geo
+  end
+
+  def round(bp, res, bots, action, rc) do
+    options = find_options(bp, res)
+    {res, new_bots} = build_bot(bp, res, bots, action)
+    new_res = Map.merge(res, bots, fn _k, v1, v2 -> v1 + v2 end)
+
+    Enum.map(options, &round(bp, new_res, new_bots, &1, rc + 1))
+  end
+end
+
+D19.parse_blueprint(input)
+|> hd()
+|> D19.round()
+|> List.flatten()
+|> Enum.max()
+```
